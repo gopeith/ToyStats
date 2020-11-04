@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import sys
 import csv
+from datetime import date
 
 def loadData(fnameDB, deLimiter, quotechar, encoding):
     head = None
@@ -27,6 +28,24 @@ def joinHead(head, data):
     return data2
 
 
+def stat(rec, thisYear, q=0.1):
+    years = {}
+    weight = 1.0
+    sum0 = 1e-30
+    sum1 = 0.0
+    for i in range(10):
+        year = "%d" % (thisYear - i)
+        if year in rec:
+            val = int(rec[year])
+            years[int(year)] = val
+            sum0 = sum0 + weight
+            sum1 = sum1 + weight * val
+        weight = q * weight
+    s = sum1 / sum0
+    return years, s
+
+
+
 if __name__ == "__main__":
 
     fnameDB = "data/Book1.csv"
@@ -34,18 +53,46 @@ if __name__ == "__main__":
     quotechar = '"'
     encoding = "cp1250"
 
+    thisYear = int(date.today().year)
+
     head, data = loadData(fnameDB, deLimiter, quotechar, encoding)
     data = joinHead(head, data)
 
-    for rec in data:
-        print(data)
+    str2int = lambda x: int(x.replace(",", ""))
 
-    vs = {}
+    shopLabel = "SHOP RESPONSIBLE FOR STOCK"
+
+    results = {}
     for rec in data:
-        for key in rec:
-            if not key in vs:
-                vs[key] = []
-            v = rec[key]
-            if not v in vs[key]:
-                vs[key].append(v)
-    print(vs)
+        shop = "%s = %s" % (shopLabel, rec[shopLabel])
+        if not shop in results:
+            results[shop] = []
+        key = ["%s = %s" % (label, rec[label]) for label in ["YK10", "DOCK", "SATELLITE CODE"]]
+        key = ", ".join(key)
+        years, s = stat(rec, thisYear)
+        s_tab = str2int(rec["pocet kanbanu"]) * str2int(rec["kanban mnozstvi"])
+        loss = s - s_tab
+        results[shop].append((loss, key, s_tab, s, years))
+
+    for shop in results:
+        results[shop].sort()
+        results[shop].reverse()
+        print("")
+        print(shop)
+        for item in results[shop]:
+            print(item)
+
+    exit(0)
+
+    # klic
+    yk10 = "YK02490078"
+    dock = "CG"
+    satcode = "G"
+
+    for rec in data:
+        if rec["YK10"] == yk10 and rec["DOCK"] == dock and rec["SATELLITE CODE"] == satcode:
+            for key in rec:
+                print((key, rec[key]))
+            stat = int(rec["2019"]) # pozor na zaporna cisla
+            crit = int(rec["pocet kanbanu"]) * int(rec["kanban mnozstvi"]) # zap. je spatny
+            print(stat - crit)

@@ -28,7 +28,7 @@ def joinHead(head, data):
     return data2
 
 
-def stat(rec, thisYear, q=0.1):
+def stat(rec, thisYear, q=0.01):
     years = {}
     weight = 1.0
     sum0 = 1e-30
@@ -71,7 +71,7 @@ if __name__ == "__main__":
         key = ", ".join(key)
         years, s = stat(rec, thisYear)
         s_tab = str2int(rec["pocet kanbanu"]) * str2int(rec["kanban mnozstvi"])
-        loss = s - s_tab
+        loss = s_tab - s
         results[shop].append((loss, key, s_tab, s, years))
 
     for shop in results:
@@ -80,19 +80,11 @@ if __name__ == "__main__":
         print("")
         print(shop)
         for item in results[shop]:
-            print(item)
+            print("")
+            loss, key, s_tab, s, years = item
+            print("\t%s" % key)
+            print("\tyears = " + str(years))
+            print("\tstat = %f" % s)
+            print("\ttab  = %f" % s_tab)
+            print("\tloss  = %f" % loss)
 
-    exit(0)
-
-    # klic
-    yk10 = "YK02490078"
-    dock = "CG"
-    satcode = "G"
-
-    for rec in data:
-        if rec["YK10"] == yk10 and rec["DOCK"] == dock and rec["SATELLITE CODE"] == satcode:
-            for key in rec:
-                print((key, rec[key]))
-            stat = int(rec["2019"]) # pozor na zaporna cisla
-            crit = int(rec["pocet kanbanu"]) * int(rec["kanban mnozstvi"]) # zap. je spatny
-            print(stat - crit)

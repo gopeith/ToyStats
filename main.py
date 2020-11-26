@@ -1,7 +1,18 @@
 # -*- coding: utf-8 -*-
+
+import os
 import sys
 import csv
 from datetime import date
+
+if sys.version_info[0] == 3:
+    # for Python3
+    import tkinter as tk
+    import tkinter.filedialog
+else:
+    # for Python2
+    import Tkinter as tk
+    import Tkinter.filedialog
 
 def loadData(fnameDB, deLimiter, quotechar, encoding):
     head = None
@@ -28,30 +39,16 @@ def joinHead(head, data):
     return data2
 
 
-def stat(rec, thisYear, q=0.01):
-    years = {}
-    weight = 1.0
-    sum0 = 1e-30
-    sum1 = 0.0
-    for i in range(10):
+def stat(rec, thisYear):
+    for i in range(100):
         year = "%d" % (thisYear - i)
         if year in rec:
             val = int(rec[year])
-            years[int(year)] = val
-            sum0 = sum0 + weight
-            sum1 = sum1 + weight * val
-        weight = q * weight
-    s = sum1 / sum0
-    return years, s
+            return year, val
+    return None, None
 
 
-
-if __name__ == "__main__":
-
-    fnameDB = "data/Book1.csv"
-    deLimiter = ","
-    quotechar = '"'
-    encoding = "cp1250"
+def computeStats(fnameDB, deLimiter=",", quotechar='"', encoding="cp1250"):
 
     thisYear = int(date.today().year)
 
@@ -69,22 +66,81 @@ if __name__ == "__main__":
             results[shop] = []
         key = ["%s = %s" % (label, rec[label]) for label in ["YK10", "DOCK", "SATELLITE CODE"]]
         key = ", ".join(key)
-        years, s = stat(rec, thisYear)
+        year, s = stat(rec, thisYear)
         s_tab = str2int(rec["pocet kanbanu"]) * str2int(rec["kanban mnozstvi"])
         loss = s_tab - s
-        results[shop].append((loss, key, s_tab, s, years))
+        results[shop].append((loss, key, s_tab, s, year))
 
     for shop in results:
         results[shop].sort()
         results[shop].reverse()
-        print("")
-        print(shop)
-        for item in results[shop]:
-            print("")
-            loss, key, s_tab, s, years = item
-            print("\t%s" % key)
-            print("\tyears = " + str(years))
-            print("\tstat = %f" % s)
-            print("\ttab  = %f" % s_tab)
-            print("\tloss  = %f" % loss)
 
+    return results
+
+def data2text(results):
+    text = []
+    for shop in results:
+        text.append(shop)
+        for item in results[shop]:
+            loss, key, s_tab, s, year = item
+            text.append("%s: year = %s, stat = %f, tab = %f, loss = %f" % (key, year, s, s_tab, loss))
+        text.append("")
+    text = "\n".join(text)
+    return text
+
+class App(tk.Frame):
+    def __init__(self, master=None):
+        super().__init__(master)
+        self.master = master
+        self.pack()
+        self.data = None
+        self.monitor = None
+        self.create_widgets()
+
+    def newMonitor(self):
+        if not self.monitor is None:
+            self.xscrollbar.destroy()
+            self.yscrollbar.destroy()
+            self.monitor.destroy()
+        xscrollbar = tk.Scrollbar(self, orient=tk.HORIZONTAL)
+        xscrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+        yscrollbar = tk.Scrollbar(self)
+        yscrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.xscrollbar = xscrollbar
+        self.yscrollbar = yscrollbar
+        self.monitor = tk.Text(self, wrap="none", xscrollcommand=xscrollbar.set, yscrollcommand=yscrollbar.set, height = 200, width = 400)
+        xscrollbar.config(command=self.monitor.xview)
+        yscrollbar.config(command=self.monitor.yview)
+        #self.monitor.pack(side="bottom")
+        self.monitor.pack(expand=tk.YES, fill=tk.BOTH)
+
+    def create_widgets(self):
+        menubar = tk.Menu(self)
+        self.menu = menubar
+        menubar.add_command(label="Load dataset", command=self.load)
+        menubar.add_command(label="Save results", command=self.save)
+        menubar.add_command(label="Quit", command=self.master.destroy)
+        self.master.config(menu=menubar)
+        self.newMonitor()
+
+
+    def load(self):
+        initialdir = (os.path.dirname(os.path.abspath(__file__)))
+        filename = tk.filedialog.askopenfilename(initialdir=initialdir, title="Select a File", filetypes=(("CSV files", "*.csv"), ("all files", "*.*")))
+        if len(filename) == 0:
+            return
+        self.data = computeStats(filename)
+        self.newMonitor()
+        text = data2text(self.data)
+        self.monitor.insert(tk.INSERT, text)
+        #print(self.data)
+
+    def save(self):
+        print("saving")
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    root.title("ToyStats")
+    app = App(master=root)
+    app.mainloop()

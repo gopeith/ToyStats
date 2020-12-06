@@ -4,6 +4,7 @@ import os
 import sys
 import csv
 from datetime import date
+import re
 
 if sys.version_info[0] == 3:
     # for Python3
@@ -13,6 +14,10 @@ else:
     # for Python2
     import Tkinter as tk
     import Tkinter.filedialog
+
+labels4key = ["YK10", "DOCK", "SATELLITE CODE"]
+shopLabel = "SHOP RESPONSIBLE FOR STOCK"
+
 
 def loadData(fnameDB, deLimiter, quotechar, encoding):
     head = None
@@ -57,19 +62,18 @@ def computeStats(fnameDB, deLimiter=",", quotechar='"', encoding="cp1250"):
 
     str2int = lambda x: int(x.replace(",", ""))
 
-    shopLabel = "SHOP RESPONSIBLE FOR STOCK"
-
     results = {}
     for rec in data:
-        shop = "%s = %s" % (shopLabel, rec[shopLabel])
-        if not shop in results:
-            results[shop] = []
-        key = ["%s = %s" % (label, rec[label]) for label in ["YK10", "DOCK", "SATELLITE CODE"]]
-        key = ", ".join(key)
+        shop = rec[shopLabel]
+        #key = ["%s = %s" % (label, rec[label]) for label in ["YK10", "DOCK", "SATELLITE CODE"]]
+        key = tuple([rec[label] for label in labels4key])
         year, s = stat(rec, thisYear)
         s_tab = str2int(rec["pocet kanbanu"]) * str2int(rec["kanban mnozstvi"])
         loss = s_tab - s
-        results[shop].append((loss, key, s_tab, s, year))
+        if loss > 0:
+            if not shop in results:
+                results[shop] = []
+            results[shop].append((loss, key, s_tab, s, year))
 
     for shop in results:
         results[shop].sort()
@@ -77,16 +81,30 @@ def computeStats(fnameDB, deLimiter=",", quotechar='"', encoding="cp1250"):
 
     return results
 
+
 def data2text(results):
     text = []
     for shop in results:
-        text.append(shop)
+        text.append("%s = %s" % (shopLabel, shop))
         for item in results[shop]:
             loss, key, s_tab, s, year = item
-            text.append("%s: year = %s, stat = %f, tab = %f, loss = %f" % (key, year, s, s_tab, loss))
+            key_s = " ".join(["%s = %s" % (labels4key[i], key[i]) for i in range(len(key))])
+            text.append("%s: year = %s, stat = %f, tab = %f, loss = %f" % (key_s, year, s, s_tab, loss))
         text.append("")
     text = "\n".join(text)
     return text
+
+
+def saveResults(data, fname):
+    if fname is None:
+        return # no tak nic
+    f = open(fname, "w")
+    f.write("%s\n" % ",".join(["SHOP"] + labels4key + ["YEAR", "STAT", "TAB", "LOSS"]))
+    for shop in data:
+        for loss, key, s_tab, s, year in data[shop]:
+            f.write("%s\n" % ",".join([shop] + list(key) + [year, "%f" % s, "%f" % s_tab, "%f" % loss]))
+    f.close()
+
 
 class App(tk.Frame):
     def __init__(self, master=None):
@@ -94,6 +112,7 @@ class App(tk.Frame):
         self.master = master
         self.pack()
         self.data = None
+        self.data_filename = None
         self.monitor = None
         self.create_widgets()
 
@@ -130,13 +149,22 @@ class App(tk.Frame):
         if len(filename) == 0:
             return
         self.data = computeStats(filename)
+        self.data_filename = filename
         self.newMonitor()
         text = data2text(self.data)
         self.monitor.insert(tk.INSERT, text)
         #print(self.data)
 
     def save(self):
-        print("saving")
+        if self.data is None:
+            return
+        initialdir = re.sub(r"[/\\][^/\\]*$", "", self.data_filename)
+        initialfile = re.sub(r".*[/\\]([^/\\]*)$", r"\1_toystat", os.path.splitext(self.data_filename)[0])
+        filename = tk.filedialog.asksaveasfilename(initialdir=initialdir, title="Select a File", defaultextension=".csv",
+                                                 filetypes=(("CSV files", "*.csv"), ("all files", "*.*")), initialfile=initialfile)
+        if len(filename) == 0:
+            return
+        saveResults(self.data, filename)
 
 
 if __name__ == "__main__":
